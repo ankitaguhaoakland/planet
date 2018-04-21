@@ -1,0 +1,186 @@
+---
+title: "PredictiveRegressionModellingFor1987_2017_4States"
+output: html_document
+author: "AKJ"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Loading a few libraries
+```{r}
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(useful)
+library(coefplot)
+library(caret)
+library(lattice)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(class)
+library(randomForest)
+library(reshape2)
+library(glmnet)
+```
+
+**Data Preparation**
+```{r}
+aq4States <- read.table("eda2_States.csv", header = TRUE, sep = ",")
+aq4States$X <-NULL
+#ojsalesdf <- ojsales[ojsales$StoreID != "7",]
+#aq4Statesdf <- aq4States[aq4States$method_name != "",] # Removes the method_name with blank values but drops to a 1000 variables less
+na.omit(aq4Statesdf)
+
+#aq4Statesdf["Pollutant"] <- NA
+
+aq4Statesdf$parameter_name <- NULL
+aq4Statesdf$method_name <- NULL
+
+##Use for the Entire Data Calculation
+aqUS2yrs <- read.table("eda2.csv", header = TRUE, sep = ",")
+aqUS2yrs$X <-NULL
+  
+# nrow(aq4Statesdf)
+# 
+# for(i in 1:nrow(aq4Statesdf)){
+#   if(aq4Statesdf$method_name[i] == "Total hydrocarbons"){
+#     aq4Statesdf$Pollutant[i] <- 1
+#   }else{
+#     aq4Statesdf$Pollutant[i] <- 0
+#   }
+# }
+# 
+# str(aq4Statesdf)
+```
+
+
+```{r}
+#ojsalesdf <- ojsales[ojsales$StoreID != "7",]
+
+aq4Statesdf <- aq4States[aq4States$parameter_name != "Chromium PM10 STP",] 
+aq4Statesdf <- aq4States[aq4States$parameter_name != "Dichlorofluromethane",] 
+aq4Statesdf <- aq4States[aq4States$parameter_name != "n-Hexane",]
+aq4Statesdf <- aq4States[aq4States$parameter_name != "OP CSN_Rev Unadjusted",]
+aq4Statesdf <- aq4States[aq4States$parameter_name != "PM2.5 LC TOR",]
+aq4Statesdf <- aq4States[aq4States$parameter_name != "tert-butyl alcohol",]
+aq4Statesdf <- aq4States[aq4States$parameter_name != "tert-butyl alcohol",]
+
+#& "" & "n-Hexane" & "OP CSN_Rev Unadjusted" & "PM2.5 LC TOR" & "tert-butyl alcohol", ]
+
+aq4Statesdf$Pollutant <- as.factor(ifelse(aq4Statesdf$parameter_name=="Ozone",1,0))
+head(aq4Statesdf)
+#na.omit(aq4Statesdf)
+```
+
+```{r}
+# Pollutants across the entire US for both 1987 & 2017
+# pollutants2 <- count(aqUS2yrs, 'parameter_name') %>% filter(freq > 400)
+# count(aqUS2yrs, 'parameter_name')
+# # Visualization
+# ggplot(pollutants2, aes(x = reorder(parameter_name,freq), freq, fill = parameter_name)) +
+#    geom_bar(stat = "identity", position = "dodge") +
+#    scale_fill_brewer(palette = "Set2") + 
+#    scale_y_continuous(labels = scales::comma) + 
+#    coord_flip()
+```
+
+As seen from our previous EDA, Ozone constitutes the highest Pollutant contributor in the entire US for the year of 2017 and 1987. Let's try to see visually if that's the same story across the datasets for the 4 most Polluted States across the same time frame of 2017 and 1987. Visually looks like Suspended particulate (TSP) is one of the top Pollutant in the 4 States for the Pollutant data of both 1987 and 2017.
+
+```{r}
+# Pollutants across the 4 US States for both 1987 & 2017
+pollutants3 <- count(aq4States, 'parameter_name') %>% filter(freq > 40)
+count(aq4States, 'parameter_name')
+# Visualization
+colourCount = length(unique(pollutants3$parameter_name))
+ggplot(pollutants3, aes(x = reorder(parameter_name,freq), freq, fill = parameter_name)) +
+   geom_bar(stat = "identity", position = "dodge") +
+   scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Spectral"))(colourCount)) +
+   scale_y_continuous(labels = scales::comma) + 
+   coord_flip()
+```
+
+Now we'll just take a subset of the columns as there are a few that contain the same information. Remember, the new column `Pollutant` is the one we are trying to predict.
+
+```{r}
+set.seed(828)
+sample_size <- ceiling(0.30 * nrow(aq4Statesdf))
+testrecs <- sample(nrow(aq4Statesdf),sample_size)
+Ozone_test <- aq4Statesdf[testrecs,]
+Ozone_train <- aq4Statesdf[-testrecs,] 
+```
+
+
+
+```{r}
+Ozone_LogM1 <- glm(Pollutant ~  .,
+                    data=Ozone_train, family=binomial(link="logit"), control = list(maxit = 50))
+
+summary(Ozone_LogM1)
+
+# MM_LogM1 <- glm(MM ~  . - SalePriceMM - ListPriceDiff - SalePriceCH - PriceDiff,
+#                     data=ojsalesdf_train, family=binomial(link="logit"))
+# 
+# summary(MM_LogM1)
+```
+
+Looks like our Model has fitted well, since the Residual deviance value is less than the value of Null deviance.
+Converting probabilities to 0 and 1 for predictions.
+```{r}
+yhat_LogM1 <- (Ozone_LogM1$fit > 0.5) * 1
+```
+
+Putting the fitted and the predicted values into a dataframe for ease of analysis
+```{r}
+MM_fit_predictions <- data.frame(Ozone_LogM1$y, yhat_LogM1)
+names(MM_fit_predictions) <- c("yact","yhat_LogM1")
+```
+
+
+## Creating Confusion Matrix
+```{r}
+# Confusion Matrix
+table(MM_fit_predictions$yact, MM_fit_predictions$yhat_LogM1)
+
+# Percentage of Precision and Recall 
+prop.table(table(MM_fit_predictions$yact, MM_fit_predictions$yhat_LogM1))
+```
+
+
+```{r}
+cm_LogM1 <- confusionMatrix(MM_fit_predictions$yhat_LogM1, MM_fit_predictions$yact, 
+                            positive = "1")
+cm_LogM1
+```
+Woah! Looks like our Model has an Accuracy of 86% and the Sensitivity or the Probability of True Positive is only 48%% at the 95% confidence interval.
+
+## Predictions on Test Data for Model 1: Logistic Regression
+```{r}
+prob_LogM1 <- predict(Ozone_LogM1, newdata=Ozone_test, type="response", se.fit=FALSE)
+pred_LogM1 <- (prob_LogM1 > 0.5) * 1
+head(pred_LogM1)
+```
+
+**Simple Decision Tree**
+```{r}
+Ozone_tree <- rpart(Pollutant ~ ., data=Ozone_train, method="class")
+
+# Visualize the tree with rpart.plot
+rpart.plot(Ozone_tree)
+```
+
+```{r}
+## Creating Confusion Matrix
+```{r}
+MM_fit_predictions$yhat_tree <- predict(MM_tree, type = "class")
+
+# Confusion Matrix
+table(MM_fit_predictions$yact, MM_fit_predictions$yhat_tree)
+
+# Percentage of Precision and Recall 
+prop.table(table(MM_fit_predictions$yact, MM_fit_predictions$yhat_tree))
+```
+
+
