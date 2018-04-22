@@ -1,7 +1,7 @@
 ---
-title: "PredictiveRegressionModellingFor1987_2017_4States"
+title: "Predictive Regression Modelling For Air Quality Data of 4 US States for the year of 1987 & 2017"
 output: html_document
-author: "AKJ"
+author: "Ankita Guha"
 ---
 
 ```{r setup, include=FALSE}
@@ -30,86 +30,43 @@ library(glmnet)
 ```{r}
 aq4States <- read.table("eda2_States.csv", header = TRUE, sep = ",")
 aq4States$X <-NULL
-#ojsalesdf <- ojsales[ojsales$StoreID != "7",]
-#aq4Statesdf <- aq4States[aq4States$method_name != "",] # Removes the method_name with blank values but drops to a 1000 variables less
-na.omit(aq4Statesdf)
 
-#aq4Statesdf["Pollutant"] <- NA
+na.omit(aq4States)
 
-aq4Statesdf$parameter_name <- NULL
-aq4Statesdf$method_name <- NULL
 
-##Use for the Entire Data Calculation
-aqUS2yrs <- read.table("eda2.csv", header = TRUE, sep = ",")
-aqUS2yrs$X <-NULL
-  
-# nrow(aq4Statesdf)
-# 
-# for(i in 1:nrow(aq4Statesdf)){
-#   if(aq4Statesdf$method_name[i] == "Total hydrocarbons"){
-#     aq4Statesdf$Pollutant[i] <- 1
-#   }else{
-#     aq4Statesdf$Pollutant[i] <- 0
-#   }
-# }
-# 
-# str(aq4Statesdf)
+# Creating Another Collumn With Pollutant as Binary Variable  
+nrow(aq4States)
+
+for(i in 1:nrow(aq4States)){
+  if(aq4States$method_name[i] == "Ozone"){
+    aq4States$Pollutant[i] <- 1
+  }else{
+    aq4States$Pollutant[i] <- 0
+  }
+}
+
+aq4States$Pollutant <- as.factor(ifelse(aq4States$parameter_name=="Ozone",1,0))
+str(aq4States)
+head(aq4States)
+
 ```
 
 
 ```{r}
-#ojsalesdf <- ojsales[ojsales$StoreID != "7",]
-
-aq4Statesdf <- aq4States[aq4States$parameter_name != "Chromium PM10 STP",] 
-aq4Statesdf <- aq4States[aq4States$parameter_name != "Dichlorofluromethane",] 
-aq4Statesdf <- aq4States[aq4States$parameter_name != "n-Hexane",]
-aq4Statesdf <- aq4States[aq4States$parameter_name != "OP CSN_Rev Unadjusted",]
-aq4Statesdf <- aq4States[aq4States$parameter_name != "PM2.5 LC TOR",]
-aq4Statesdf <- aq4States[aq4States$parameter_name != "tert-butyl alcohol",]
-aq4Statesdf <- aq4States[aq4States$parameter_name != "tert-butyl alcohol",]
-
-#& "" & "n-Hexane" & "OP CSN_Rev Unadjusted" & "PM2.5 LC TOR" & "tert-butyl alcohol", ]
-
-aq4Statesdf$Pollutant <- as.factor(ifelse(aq4Statesdf$parameter_name=="Ozone",1,0))
-head(aq4Statesdf)
-#na.omit(aq4Statesdf)
+aq4States$parameter_name <- NULL
+aq4States$method_name <- NULL
+str(aq4States)
 ```
 
-```{r}
-# Pollutants across the entire US for both 1987 & 2017
-# pollutants2 <- count(aqUS2yrs, 'parameter_name') %>% filter(freq > 400)
-# count(aqUS2yrs, 'parameter_name')
-# # Visualization
-# ggplot(pollutants2, aes(x = reorder(parameter_name,freq), freq, fill = parameter_name)) +
-#    geom_bar(stat = "identity", position = "dodge") +
-#    scale_fill_brewer(palette = "Set2") + 
-#    scale_y_continuous(labels = scales::comma) + 
-#    coord_flip()
-```
-
-As seen from our previous EDA, Ozone constitutes the highest Pollutant contributor in the entire US for the year of 2017 and 1987. Let's try to see visually if that's the same story across the datasets for the 4 most Polluted States across the same time frame of 2017 and 1987. Visually looks like Suspended particulate (TSP) is one of the top Pollutant in the 4 States for the Pollutant data of both 1987 and 2017.
-
-```{r}
-# Pollutants across the 4 US States for both 1987 & 2017
-pollutants3 <- count(aq4States, 'parameter_name') %>% filter(freq > 40)
-count(aq4States, 'parameter_name')
-# Visualization
-colourCount = length(unique(pollutants3$parameter_name))
-ggplot(pollutants3, aes(x = reorder(parameter_name,freq), freq, fill = parameter_name)) +
-   geom_bar(stat = "identity", position = "dodge") +
-   scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Spectral"))(colourCount)) +
-   scale_y_continuous(labels = scales::comma) + 
-   coord_flip()
-```
 
 Now we'll just take a subset of the columns as there are a few that contain the same information. Remember, the new column `Pollutant` is the one we are trying to predict.
 
 ```{r}
 set.seed(828)
-sample_size <- ceiling(0.30 * nrow(aq4Statesdf))
-testrecs <- sample(nrow(aq4Statesdf),sample_size)
-Ozone_test <- aq4Statesdf[testrecs,]
-Ozone_train <- aq4Statesdf[-testrecs,] 
+sample_size <- ceiling(0.30 * nrow(aq4States))
+testrecs <- sample(nrow(aq4States),sample_size)
+Ozone_test <- aq4States[testrecs,]
+Ozone_train <- aq4States[-testrecs,] 
 ```
 
 
@@ -119,11 +76,6 @@ Ozone_LogM1 <- glm(Pollutant ~  .,
                     data=Ozone_train, family=binomial(link="logit"), control = list(maxit = 50))
 
 summary(Ozone_LogM1)
-
-# MM_LogM1 <- glm(MM ~  . - SalePriceMM - ListPriceDiff - SalePriceCH - PriceDiff,
-#                     data=ojsalesdf_train, family=binomial(link="logit"))
-# 
-# summary(MM_LogM1)
 ```
 
 Looks like our Model has fitted well, since the Residual deviance value is less than the value of Null deviance.
@@ -134,27 +86,27 @@ yhat_LogM1 <- (Ozone_LogM1$fit > 0.5) * 1
 
 Putting the fitted and the predicted values into a dataframe for ease of analysis
 ```{r}
-MM_fit_predictions <- data.frame(Ozone_LogM1$y, yhat_LogM1)
-names(MM_fit_predictions) <- c("yact","yhat_LogM1")
+Ozone_fit_predictions <- data.frame(Ozone_LogM1$y, yhat_LogM1)
+names(Ozone_fit_predictions) <- c("yact","yhat_LogM1")
 ```
 
 
 ## Creating Confusion Matrix
 ```{r}
 # Confusion Matrix
-table(MM_fit_predictions$yact, MM_fit_predictions$yhat_LogM1)
+table(Ozone_fit_predictions$yact, Ozone_fit_predictions$yhat_LogM1)
 
 # Percentage of Precision and Recall 
-prop.table(table(MM_fit_predictions$yact, MM_fit_predictions$yhat_LogM1))
+prop.table(table(Ozone_fit_predictions$yact, Ozone_fit_predictions$yhat_LogM1))
 ```
 
 
 ```{r}
-cm_LogM1 <- confusionMatrix(MM_fit_predictions$yhat_LogM1, MM_fit_predictions$yact, 
+cm_LogM1 <- confusionMatrix(Ozone_fit_predictions$yhat_LogM1, Ozone_fit_predictions$yact, 
                             positive = "1")
 cm_LogM1
 ```
-Woah! Looks like our Model has an Accuracy of 86% and the Sensitivity or the Probability of True Positive is only 48%% at the 95% confidence interval.
+Woah! Looks like our Model has an Accuracy of 87% and the Sensitivity or the Probability of True Positive is only 43% at the 95% confidence interval.
 
 ## Predictions on Test Data for Model 1: Logistic Regression
 ```{r}
@@ -173,14 +125,157 @@ rpart.plot(Ozone_tree)
 
 ```{r}
 ## Creating Confusion Matrix
-```{r}
-MM_fit_predictions$yhat_tree <- predict(MM_tree, type = "class")
+
+Ozone_fit_predictions$yhat_tree <- predict(Ozone_tree, type = "class")
 
 # Confusion Matrix
-table(MM_fit_predictions$yact, MM_fit_predictions$yhat_tree)
+table(Ozone_fit_predictions$yact, Ozone_fit_predictions$yhat_tree)
 
 # Percentage of Precision and Recall 
-prop.table(table(MM_fit_predictions$yact, MM_fit_predictions$yhat_tree))
+prop.table(table(Ozone_fit_predictions$yact, Ozone_fit_predictions$yhat_tree))
 ```
 
+
+```{r}
+cm_tree <- confusionMatrix(Ozone_fit_predictions$yhat_tree, Ozone_fit_predictions$yact, 
+                            positive = "1")
+cm_tree
+```
+
+## Predictions on Test Data for Model 2: Simple Decision Tree
+```{r}
+pred_tree <- predict(Ozone_tree, newdata=Ozone_test, type="class")
+head(pred_tree)
+```
+# Model 3: Random Forest
+```{r}
+rand_forest <- randomForest(Pollutant ~ ., data=Ozone_train, method = "class")
+rand_forest
+```
+
+## Creating Confusion Matrix
+```{r}
+Ozone_fit_predictions$yhat_rf <- predict(rand_forest, type = "class")
+
+# Confusion matrix
+table(Ozone_fit_predictions$yact, Ozone_fit_predictions$yhat_rf)
+
+# Percentage of Precision and Recall 
+prop.table(table(Ozone_fit_predictions$yact, Ozone_fit_predictions$yhat_rf))
+```
+
+```{r}
+cm_rf <- confusionMatrix(Ozone_fit_predictions$yhat_rf, Ozone_fit_predictions$yact, 
+                            positive = "1")
+cm_rf
+```
+
+## Predictions on Test Data for Model 3: Random Forest
+```{r}
+pred_rf <- predict(rand_forest, newdata=Ozone_test, type="class")
+head(pred_rf)
+```
+
+
+Then use the `predict()` function to make classification predictions on the
+test dataset and use `caret::confusionMatrix` to create a confusion matrix
+for each of the models for the predictions. 
+
+## Summarizing 
+
+Now let’s gather the three sets of prediction along with the actual values into its own dataframe.
+```{r}
+pred_results <- as.data.frame(cbind(pred_LogM1, 
+                                    pred_tree, pred_rf, Ozone_test$Pollutant))
+
+names(pred_results) <- c("pred_LogM1", "pred_tree", "pred_rf","test_Pollutant")
+head(pred_results)
+```
+
+Hmmm, looks like the values are the level numbers. Let’s just adjust to match our logistic regression predictions for the rest of our Models.
+
+```{r}
+pred_results$pred_tree <- pred_results$pred_tree - 1
+pred_results$pred_rf <- pred_results$pred_rf - 1
+pred_results$test_Pollutant <- pred_results$test_Pollutant - 1
+head(pred_results)
+```
+Now let’s just create a confusion matrix for each model and the actual values from the Ozone_test dataset and compare their performance.
+
+```{r}
+cm_predLogM1 <- confusionMatrix(pred_results$pred_LogM1, 
+                                 pred_results$test_Pollutant, 
+                                 positive = "1")
+
+cm_predtree <- confusionMatrix(pred_results$pred_tree, 
+                                pred_results$test_Pollutant, 
+                                positive = "1")
+
+cm_predrf <- confusionMatrix(pred_results$pred_rf, 
+                                pred_results$test_Pollutant, 
+                                positive = "1")
+```
+
+## Confusion Matrix for Predicted Model 1: Logistic Regression
+```{r}
+cm_predLogM1
+```
+
+## Confusion Matrix for Predicted Model 2: Simple Decision Tree
+```{r}
+cm_predtree
+```
+
+## Confusion Matrix for Predicted Model 3: Random Forest
+```{r}
+cm_predrf
+```
+## Accuracy & Sensitivity for all the Fitted Models
+```{r}
+# Model 1: Logistic Regression
+sprintf("Model 1 - Logistic Regression: Accuracy = %8.4f Sensitivity = %8.4f", 
+        cm_LogM1$overall["Accuracy"],
+        cm_LogM1$byClass["Sensitivity"])
+```
+
+```{r}
+# Model 2: Simple Decision Tree
+sprintf("Model 2 - Simple Decision Tree: Accuracy = %8.4f Sensitivity = %8.4f", 
+        cm_tree$overall["Accuracy"],
+        cm_tree$byClass["Sensitivity"])
+```
+
+```{r}
+# Model 3: Random Forest
+sprintf("Model 3 - Random Forest: Accuracy = %8.4f Sensitivity = %8.4f", 
+        cm_rf$overall["Accuracy"],
+        cm_rf$byClass["Sensitivity"])
+```
+
+## Accuracy & Sensitivity for all the Predicted Models
+```{r}
+# Model 1: Logistic Regression
+sprintf("Model 1 - Logistic Regression: Accuracy = %8.4f Sensitivity = %8.4f", 
+        cm_predLogM1$overall["Accuracy"],
+        cm_predLogM1$byClass["Sensitivity"])
+```
+
+```{r}
+# Model 2: Simple Decision Tree
+sprintf("Model 2 - Simple Decision Tree: Accuracy = %8.4f Sensitivity = %8.4f", 
+        cm_predtree$overall["Accuracy"],
+        cm_predtree$byClass["Sensitivity"])
+```
+
+```{r}
+# Model 3: Random Forest
+sprintf("Model 3 - Random Forest: Accuracy = %8.4f Sensitivity = %8.4f", 
+        cm_predrf$overall["Accuracy"],
+        cm_predrf$byClass["Sensitivity"])
+```
+
+** Conclusion **
+
+Best Model Accuracy: Simple Decision Tree
+Best Model Sensitivity: Logistic Regression
 
